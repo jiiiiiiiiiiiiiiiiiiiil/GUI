@@ -1,18 +1,44 @@
-# config.py
-import json
-from pathlib import Path
+import sys
+import os
 
-CONFIG_PATH = Path("config/config.json")
+from PySide6.QtWidgets import QApplication, QFileDialog
 
-
-def load_config() -> dict:
-    if not CONFIG_PATH.exists():
-        return {}
-    with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+from config import get_last_project_path, set_last_project_path
+from project_manager import load_project
+from paths import set_project_path
+from main_window import MainWindow
 
 
-def save_config(config: dict):
-    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
-    with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-        json.dump(config, f, indent=2)
+def select_project_via_dialog() -> str | None:
+    dialog = QFileDialog()
+    dialog.setFileMode(QFileDialog.Directory)
+    dialog.setOption(QFileDialog.ShowDirsOnly, True)
+
+    if dialog.exec():
+        return dialog.selectedFiles()[0]
+
+    return None
+
+
+def main():
+    app = QApplication(sys.argv)
+
+    project_path = get_last_project_path()
+
+    if not project_path or not os.path.exists(project_path):
+        project_path = select_project_via_dialog()
+        if not project_path:
+            sys.exit(0)
+        set_last_project_path(project_path)
+
+    set_project_path(project_path)
+    load_project(project_path)
+
+    window = MainWindow()
+    window.show()
+
+    sys.exit(app.exec())
+
+
+if __name__ == "__main__":
+    main()
