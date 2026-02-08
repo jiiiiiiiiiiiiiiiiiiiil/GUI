@@ -1,174 +1,104 @@
 import sys
-from pathlib import Path
 
-from PySide6.QtWidgets import (
-    QApplication,
-    QWidget,
-    QVBoxLayout,
-    QHBoxLayout,
-    QLabel,
-    QPushButton,
-    QFrame,
-    QScrollArea,
-    QMessageBox,
-)
-
-from excel_validator import (
-    validate_excel_file,
-    ValidationError,
-    SCENES_REQUIRED_COLUMNS,
-    MILESTONES_REQUIRED_COLUMNS,
-)
+from project_manager import ProjectManager
 
 
-# =========================
-# PROJECT SETUP
-# =========================
-
-# TEMPORARY project path (replace later with config / dialog)
-PROJECT_PATH = Path("C:/Users/jilra/Documents/Sonstiges/Bücher/GUI")  # <-- anpassen
-
-project_valid = True
-project_error_message = None
-
-try:
-    validate_excel_file(PROJECT_PATH / "Scenes.xlsx", SCENES_REQUIRED_COLUMNS)
-    validate_excel_file(PROJECT_PATH / "Milestones.xlsx", MILESTONES_REQUIRED_COLUMNS)
-except ValidationError as e:
-    project_valid = False
-    project_error_message = str(e)
+def determine_start_state(project_manager) -> bool:
+    project_path = project_manager.load_last_project()
+    return project_path is not None
 
 
-# =========================
-# QT APP
-# =========================
+def run_app():
+    from PySide6.QtWidgets import (
+        QApplication,
+        QWidget,
+        QVBoxLayout,
+        QHBoxLayout,
+        QLabel,
+        QPushButton,
+        QScrollArea,
+    )
 
-app = QApplication(sys.argv)
+    # =========================
+    # APP START / PROJECT FLOW
+    # =========================
 
-window = QWidget()
-window.setWindowTitle("Scene Manager")
-window.resize(900, 600)
+    project_manager = ProjectManager()
+    project_loaded = determine_start_state(project_manager)
 
+    # =========================
+    # QT APP
+    # =========================
 
-# =========================
-# TOP BAR
-# =========================
+    app = QApplication(sys.argv)
 
-top_bar = QHBoxLayout()
+    window = QWidget()
+    window.setWindowTitle("Scene Manager")
+    window.resize(900, 600)
 
-total_word_count_label = QLabel("Total words: —")
-refresh_wc_button = QPushButton("Refresh word count")
-reset_button = QPushButton("Reset")
-create_scene_button = QPushButton("Create scene")
-switch_project_button = QPushButton("Switch project")
-save_button = QPushButton("Save")
+    # =========================
+    # TOP BAR
+    # =========================
 
-top_bar.addWidget(total_word_count_label)
-top_bar.addWidget(refresh_wc_button)
-top_bar.addWidget(reset_button)
-top_bar.addStretch()
-top_bar.addWidget(create_scene_button)
-top_bar.addWidget(switch_project_button)
-top_bar.addWidget(save_button)
+    top_bar = QHBoxLayout()
 
+    total_word_count_label = QLabel("Total words: —")
+    refresh_wc_button = QPushButton("Refresh word count")
+    reset_button = QPushButton("Reset")
+    create_scene_button = QPushButton("Create scene")
+    switch_project_button = QPushButton("Switch project")
+    save_button = QPushButton("Save")
 
-# Disable project-related actions if project is invalid
-if not project_valid:
-    refresh_wc_button.setEnabled(False)
-    reset_button.setEnabled(False)
-    create_scene_button.setEnabled(False)
-    save_button.setEnabled(False)
+    top_bar.addWidget(total_word_count_label)
+    top_bar.addWidget(refresh_wc_button)
+    top_bar.addWidget(reset_button)
+    top_bar.addStretch()
+    top_bar.addWidget(create_scene_button)
+    top_bar.addWidget(switch_project_button)
+    top_bar.addWidget(save_button)
 
+    if not project_loaded:
+        refresh_wc_button.setEnabled(False)
+        reset_button.setEnabled(False)
+        create_scene_button.setEnabled(False)
+        save_button.setEnabled(False)
 
-# =========================
-# SCENE LIST
-# =========================
+    # =========================
+    # SCENE LIST
+    # =========================
 
-scene_list_container = QWidget()
-scene_list_layout = QVBoxLayout(scene_list_container)
-scene_list_layout.addWidget(QLabel("Scenes"))
+    scene_list_container = QWidget()
+    scene_list_layout = QVBoxLayout(scene_list_container)
+    scene_list_layout.addWidget(QLabel("Scenes"))
 
-if project_valid:
-    from scene_loader import load_scenes
-
-    scenes = load_scenes(PROJECT_PATH / "Scenes.xlsx")
-
-    for scene in scenes:
-        scene_box = QFrame()
-        scene_box.setFrameShape(QFrame.Box)
-
-        scene_layout = QVBoxLayout(scene_box)
-
-        scene_layout.addWidget(
-            QLabel(f'{scene["number"]}. {scene["title"]}')
+    if project_loaded:
+        scene_list_layout.addWidget(
+            QLabel("Project loaded.\n(Scene list will be shown after initialization.)")
         )
-        scene_layout.addWidget(QLabel("—"))  # Milestones placeholder
-        scene_layout.addWidget(QLabel(f'POV: {scene["pov"]}'))
-        scene_layout.addWidget(QLabel("Word count: —"))
+    else:
+        scene_list_layout.addWidget(
+            QLabel("No project loaded.\nPlease select a project folder.")
+        )
 
-        toggle_button = QPushButton("▶")
-        toggle_button.setCheckable(True)
-        toggle_button.setChecked(False)
-        toggle_button.setFixedWidth(24)
-        toggle_button.setFlat(True)
-        scene_layout.addWidget(toggle_button)
+    scene_list_layout.addStretch()
 
-        content_container = QWidget()
-        content_layout = QVBoxLayout(content_container)
-        content_layout.setContentsMargins(0, 0, 0, 0)
+    scroll_area = QScrollArea()
+    scroll_area.setWidgetResizable(True)
+    scroll_area.setWidget(scene_list_container)
 
-        content_layout.addWidget(QLabel("Content:"))
-        content_layout.addWidget(QLabel(scene["content"]))
+    # =========================
+    # ROOT LAYOUT
+    # =========================
 
-        content_container.setVisible(False)
-        scene_layout.addWidget(content_container)
+    root_layout = QVBoxLayout()
+    root_layout.addLayout(top_bar)
+    root_layout.addWidget(scroll_area)
 
+    window.setLayout(root_layout)
+    window.show()
 
-        def toggle_content(checked, container=content_container, button=toggle_button):
-            container.setVisible(checked)
-            button.setText("▼" if checked else "▶")
+    sys.exit(app.exec())
 
 
-        toggle_button.toggled.connect(toggle_content)
-
-        scene_list_layout.addWidget(scene_box)
-
-else:
-    # Placeholder when project is invalid
-    scene_list_layout.addWidget(
-        QLabel("No valid project loaded.\nPlease fix the project files or switch project.")
-    )
-
-scene_list_layout.addStretch()
-
-scroll_area = QScrollArea()
-scroll_area.setWidgetResizable(True)
-scroll_area.setWidget(scene_list_container)
-
-
-# =========================
-# ROOT LAYOUT
-# =========================
-
-root_layout = QVBoxLayout()
-root_layout.addLayout(top_bar)
-root_layout.addWidget(scroll_area)
-
-window.setLayout(root_layout)
-window.show()
-
-
-# =========================
-# ERROR DIALOG (AFTER SHOW)
-# =========================
-
-if not project_valid:
-    QMessageBox.critical(
-        window,
-        "Project load failed",
-        f"The project could not be loaded:\n\n{project_error_message}\n\n"
-        "Please fix the files or switch to another project.",
-    )
-
-
-sys.exit(app.exec())
+if __name__ == "__main__":
+    run_app()
